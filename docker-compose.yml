@@ -1,0 +1,112 @@
+services:
+  # 1. MongoDB Database
+  mongodb:
+    image: mongo:8.0-noble
+    container_name: livequiz-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=livequizuser
+      - MONGO_INITDB_ROOT_PASSWORD=livequiz123
+      - MONGO_INITDB_DATABASE=livequiz
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - livequiz-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # 2. Redis Cache
+  redis:
+    image: redis:7.4-alpine
+    container_name: livequiz-redis
+    command: /bin/sh -c "redis-server --requirepass \$$REDIS_PASSWORD"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - livequiz-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - REDIS_PASSWORD=redis_password
+    restart: unless-stopped
+
+  # 3. Backend Express API Server
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: livequiz-backend
+    init: true
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - NODE_ENV=production
+      - ACCESS_TOKEN_SECRET=your-access-token-secret
+      - REFRESH_TOKEN_SECRET=your-refresh-token-secret
+      - MONGO_URI=mongodb://livequizuser:livequiz123@mongodb:27017/livequiz?authSource=admin
+      - REDIS_URI=redis://redis:6379
+      - REDIS_PASSWORD=redis_password
+      - FRONTEND_URL=http://localhost:3000
+      - SMTP_HOST=smtp.ethereal.email
+      - SMTP_PORT=587
+      - SMTP_USER=
+      - SMTP_PASS=
+      - SMTP_FROM="Live Quiz" <no-reply@livequiz.com>
+
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - livequiz-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # 4. Frontend Next.js Web Client
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+    container_name: livequiz-frontend
+    init: true
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - livequiz-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  livequiz-network:
+    driver: bridge

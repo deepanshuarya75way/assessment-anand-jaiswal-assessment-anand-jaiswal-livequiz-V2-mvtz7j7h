@@ -1,0 +1,7 @@
+api.livequiz.anandjaiswal.dev {
+
+    encode gzip
+
+    reverse_proxy backend:8000
+
+}

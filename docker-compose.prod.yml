@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+  # ----------------------------------------
+  # Express Backend
+  # ----------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: livequiz-backend-prod
+
+    init: true
+
+    expose:
+      - "8000"
+
+    environment:
+      PORT: 8000
+      NODE_ENV: production
+
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+
+      MONGO_URI: ${MONGO_URI}
+
+      REDIS_URI: ${REDIS_URI}
+
+      FRONTEND_URL: ${FRONTEND_URL}
+
+      SMTP_HOST: ${SMTP_HOST:-smtp.ethereal.email}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM:-"Live Quiz" <no-reply@livequiz.com>}
+
+    networks:
+      - livequiz-network
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ----------------------------------------
+  # Caddy Reverse Proxy
+  # ----------------------------------------
+  caddy:
+    image: caddy:2-alpine
+
+    container_name: livequiz-caddy
+
+    depends_on:
+      - backend
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+    networks:
+      - livequiz-network
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  livequiz-network:
+    driver: bridge
