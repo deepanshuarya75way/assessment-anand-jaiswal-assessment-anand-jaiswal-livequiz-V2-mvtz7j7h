@@ -2,13 +2,14 @@ import { Router } from "express";
 import { quizController } from "../controllers/quiz.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { validateBody } from "../middlewares/validation.middleware.js";
-import { createQuizSchema, updateQuizSchema, verifyAnswerSchema } from "../schemas/schemas.js";
+import { createQuizSchema, importQuestionsSchema, updateQuizSchema, verifyAnswerSchema } from "../schemas/schemas.js";
 
 const router = Router();
 
 // Creator routes (protected)
 router.get("/", authMiddleware as any, quizController.getQuizzes);
 router.post("/", authMiddleware as any, validateBody(createQuizSchema) as any, quizController.createQuiz);
+router.post("/import", authMiddleware as any, validateBody(importQuestionsSchema) as any, quizController.importQuestions);
 router.get("/:id", authMiddleware as any, quizController.getQuizById);
 router.put("/:id", authMiddleware as any, validateBody(updateQuizSchema) as any, quizController.updateQuiz);
 router.delete("/:id", authMiddleware as any, quizController.deleteQuiz);

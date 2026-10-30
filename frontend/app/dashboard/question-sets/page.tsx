@@ -46,6 +46,13 @@ export default function QuestionSetsPage() {
         >
           ✨ Create Question Set
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => router.push('/dashboard/question-sets/import')}
+          className="flex items-center gap-2 py-2 px-5 text-sm font-bold shrink-0"
+        >
+          Import CSV
+        </Button>
       </div>
 
       {loading && quizzes.length === 0 ? (

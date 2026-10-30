@@ -22,6 +22,17 @@ export interface Question {
   pointsWeight: number; // multiplier, e.g., 1 or 2
 }
 
+export type ImportQuestionAction = 'skip' | 'update' | 'copy';
+
+export interface ImportQuestionRow {
+  text: string;
+  options: string[];
+  correctOptionIndex: number;
+  timeLimit: number;
+  pointsWeight: number;
+  duplicateAction: ImportQuestionAction;
+}
+
 export interface Quiz {
   id: string;
   title: string;
@@ -418,6 +429,36 @@ export const MockAPI = {
     return {
       ...data,
       id: data._id,
+    };
+  },
+
+  async importQuestions(payload: {
+    targetQuizId?: string;
+    title: string;
+    description: string;
+    rows: ImportQuestionRow[];
+  }): Promise<{ targetQuiz: Quiz; summary: { created: number; updated: number; skipped: number; copied: number } }> {
+    const accessToken = localStorage.getItem('ll_access_token');
+    const res = await fetch(`${API_BASE_URL}/quizzes/import`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      const details = Array.isArray(data.details)
+        ? ` ${data.details.map((detail: { field: string; message: string }) => `${detail.field}: ${detail.message}`).join('; ')}`
+        : '';
+      throw new Error(`${data.error || 'Failed to import questions.'}${details}`);
+    }
+
+    return {
+      ...data,
+      targetQuiz: { ...data.targetQuiz, id: data.targetQuiz._id || data.targetQuiz.id },
     };
   },
 

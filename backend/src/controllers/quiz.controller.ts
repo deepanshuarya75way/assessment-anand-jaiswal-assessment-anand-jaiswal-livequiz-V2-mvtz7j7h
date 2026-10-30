@@ -3,6 +3,10 @@ import Quiz from "../models/Quiz.model.js";
 import redisClient from "../config/redis.js";
 import { type AuthenticatedRequest } from "../middlewares/auth.middleware.js";
 
+function normalizeQuestionText(text: string) {
+  return text.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export const quizController = {
   // Get all quizzes created by the logged-in user
   async getQuizzes(req: AuthenticatedRequest, res: Response) {
@@ -72,6 +76,103 @@ export const quizController = {
     } catch (error: any) {
       console.error("CreateQuiz Error:", error);
       return res.status(500).json({ error: "Internal server error." });
+    }
+  },
+
+  // Import questions into a new or existing question set and reconcile duplicates.
+  async importQuestions(req: AuthenticatedRequest, res: Response) {
+    try {
+      const creatorId = req.user?.id;
+      const { targetQuizId, title, description, rows } = req.body;
+
+      if (!creatorId) {
+        return res.status(401).json({ error: "Unauthorized access." });
+      }
+
+      const quizzes = await Quiz.find({ creatorId });
+      let targetQuiz = targetQuizId
+        ? quizzes.find((quiz) => quiz._id.toString() === targetQuizId)
+        : undefined;
+
+      if (targetQuizId && !targetQuiz) {
+        return res.status(404).json({ error: "Target question set not found." });
+      }
+
+      if (!targetQuiz) {
+        targetQuiz = new Quiz({
+          title,
+          description,
+          creatorId,
+          questions: [],
+        });
+        quizzes.push(targetQuiz);
+      }
+
+      const questionIndex = new Map<string, { quiz: typeof quizzes[number]; index: number }>();
+      for (const quiz of quizzes) {
+        quiz.questions.forEach((question, index) => {
+          const key = normalizeQuestionText(question.text);
+          if (!questionIndex.has(key)) {
+            questionIndex.set(key, { quiz, index });
+          }
+        });
+      }
+
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+      let copied = 0;
+
+      for (const row of rows) {
+        const { duplicateAction, ...question } = row;
+        const existing = questionIndex.get(normalizeQuestionText(question.text));
+
+        if (existing && duplicateAction === "skip") {
+          skipped += 1;
+          continue;
+        }
+
+        if (existing && duplicateAction === "update") {
+          existing.quiz.questions[existing.index] = question;
+          updated += 1;
+          continue;
+        }
+
+        targetQuiz.questions.push(question);
+        questionIndex.set(normalizeQuestionText(question.text), {
+          quiz: targetQuiz,
+          index: targetQuiz.questions.length - 1,
+        });
+        if (existing) {
+          copied += 1;
+        } else {
+          created += 1;
+        }
+      }
+
+      const changedQuizzes = new Set<typeof quizzes[number]>();
+      changedQuizzes.add(targetQuiz);
+      for (const row of rows) {
+        const existing = questionIndex.get(normalizeQuestionText(row.text));
+        if (existing && row.duplicateAction === "update") {
+          changedQuizzes.add(existing.quiz);
+        }
+      }
+
+      for (const quiz of changedQuizzes) {
+        await quiz.save();
+      }
+
+      return res.status(200).json({
+        targetQuiz: {
+          ...targetQuiz.toObject(),
+          id: targetQuiz._id.toString(),
+        },
+        summary: { created, updated, skipped, copied },
+      });
+    } catch (error: any) {
+      console.error("ImportQuestions Error:", error);
+      return res.status(500).json({ error: "Unable to import questions." });
     }
   },
 
