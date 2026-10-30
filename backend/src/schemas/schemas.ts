@@ -71,10 +71,24 @@ export const forgotUsernameSchema = z.object({
 // Quiz Question Schema
 export const questionSchema = z.object({
   text: z.string().min(1, "Question text is required").trim(),
-  options: z.array(z.string().min(1, "Option text cannot be empty")).min(2, "Question must have at least 2 options"),
+  options: z.array(z.string().trim().min(1, "Option text cannot be empty")).min(2, "Question must have at least 2 options"),
   correctOptionIndex: z.number().int().nonnegative("Correct option index must be non-negative"),
   timeLimit: z.number().int().positive("Time limit must be positive").default(20),
   pointsWeight: z.number().positive("Points weight must be positive").default(1),
+}).refine((question) => question.correctOptionIndex < question.options.length, {
+  path: ["correctOptionIndex"],
+  message: "Correct option index must point to an existing option",
+});
+
+const importActionSchema = z.enum(["skip", "update", "copy"]);
+
+export const importQuestionsSchema = z.object({
+  targetQuizId: z.string().min(1).optional(),
+  title: z.string().min(1, "Question set title is required").max(100).trim(),
+  description: z.string().max(500).default("").transform((value) => value.trim()),
+  rows: z.array(questionSchema.extend({
+    duplicateAction: importActionSchema.default("copy"),
+  })).min(1, "At least one question is required").max(5000, "Import cannot exceed 5000 questions"),
 });
 
 // Quiz Schemas
